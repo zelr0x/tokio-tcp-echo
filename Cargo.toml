@@ -1,0 +1,9 @@
+[package]
+name = "tokio-tcp-echo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.52.3", features = [ "rt", "rt-multi-thread", "macros", "net", "time", "signal", "io-util", "tracing" ] }
+tokio-util = { version = "0.7.18" }
+clap = { version = "4.6.1", features = [ "derive" ] }
