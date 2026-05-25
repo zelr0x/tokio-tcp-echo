@@ -1,5 +1,5 @@
-mod shutdown;
 mod server;
+mod shutdown;
 
 use clap::Parser;
 use tokio_util::sync::CancellationToken;
@@ -26,8 +26,9 @@ async fn main() -> std::io::Result<()> {
         &args.addr,
         args.port,
         args.max_connections,
-        timeouts
-    ).await?;
+        timeouts,
+    )
+    .await?;
     let addr = server.addr();
     println!("Listening on {}:{}", addr.ip(), addr.port());
     shutdown::register(cancel.clone());

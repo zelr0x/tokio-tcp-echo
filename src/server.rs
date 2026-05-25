@@ -1,7 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
-use tokio::{net::{TcpListener, TcpStream}, select, task::{JoinHandle, JoinSet}, time::{Instant, timeout}};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    select,
+    task::{JoinHandle, JoinSet},
+    time::{Instant, timeout},
+};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -24,7 +29,11 @@ impl ServerTimeouts {
     }
 
     fn same(timeout: Duration) -> Self {
-        ServerTimeouts { idle: timeout, read: timeout, write: timeout }
+        ServerTimeouts {
+            idle: timeout,
+            read: timeout,
+            write: timeout,
+        }
     }
 }
 
@@ -105,7 +114,7 @@ impl TcpEchoServer {
         _client_addr: SocketAddr,
         timeouts: ServerTimeouts,
     ) {
-        let mut buf= [0u8; 1024];
+        let mut buf = [0u8; 1024];
         let idle = tokio::time::sleep(timeouts.idle);
         tokio::pin!(idle);
         loop {
@@ -160,23 +169,17 @@ impl TcpEchoServer {
 
 #[cfg(test)]
 mod tests {
-    use tokio::runtime::Builder;
     use super::*;
+    use tokio::runtime::Builder;
 
     #[test]
     fn serve_works() {
-        let rt = Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
             let cancel = CancellationToken::new();
-            let server = TcpEchoServer::start(
-                cancel,
-                "localhost",
-                0,
-                0,
-                ServerTimeouts::default()).await.unwrap();
+            let server = TcpEchoServer::start(cancel, "localhost", 0, 0, ServerTimeouts::default())
+                .await
+                .unwrap();
             let addr = server.addr();
             let mut stream = TcpStream::connect(addr).await.unwrap();
             stream.write_all(b"hello").await.unwrap();

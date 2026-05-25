@@ -1,5 +1,8 @@
 use tokio::signal;
-use tokio::{select, time::{Duration, Instant}};
+use tokio::{
+    select,
+    time::{Duration, Instant},
+};
 use tokio_util::sync::CancellationToken;
 
 #[cfg(unix)]
@@ -9,8 +12,7 @@ pub fn register(cancel: CancellationToken) {
     let mut last_signal: Option<Instant> = None;
 
     #[cfg(unix)]
-    let mut sigterm = signal(SignalKind::terminate())
-        .expect("Failed to bind SIGTERM");
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to bind SIGTERM");
 
     tokio::task::spawn(async move {
         loop {
