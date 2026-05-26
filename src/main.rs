@@ -1,10 +1,14 @@
 mod server;
 mod shutdown;
 
-use clap::Parser;
-use tokio_util::sync::CancellationToken;
+use std::time::Duration;
 
-use crate::server::{ServerTimeouts, TcpEchoServer};
+use clap::Parser;
+
+use crate::{
+    server::{ServerTimeouts, TcpEchoServer},
+    shutdown::ShutdownManager,
+};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -19,10 +23,11 @@ pub struct Args {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let args = Args::parse();
-    let cancel = CancellationToken::new();
+    let sm = ShutdownManager::new(Duration::from_secs(30));
     let timeouts = ServerTimeouts::default();
     let server = TcpEchoServer::start(
-        cancel.clone(),
+        sm.cancel_token(),
+        sm.force_cancel_token(),
         &args.addr,
         args.port,
         args.max_connections,
@@ -31,7 +36,6 @@ async fn main() -> std::io::Result<()> {
     .await?;
     let addr = server.addr();
     println!("Listening on {}:{}", addr.ip(), addr.port());
-    shutdown::register(cancel.clone());
     server.block().await;
     Ok(())
 }

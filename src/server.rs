@@ -48,6 +48,7 @@ pub struct TcpEchoServer {
 impl TcpEchoServer {
     pub async fn start(
         cancel: CancellationToken,
+        force_cancel: CancellationToken,
         addr: &str,
         port: u16,
         max_connections: usize,
@@ -63,13 +64,11 @@ impl TcpEchoServer {
             loop {
                 select! {
                     _ = cancel_clone.cancelled() => {
-                        while connections.join_next().await.is_some() {}
-                        return;
+                        break;
                     }
-
                     Ok((sock, client_addr)) = listener.accept() => {
                         // Warning: no per-IP quotas.
-                        if max_connections > 0 && connections.len() > max_connections {
+                        if max_connections > 0 && connections.len() >= max_connections {
                             drop(sock);
                             continue
                         }
@@ -79,6 +78,15 @@ impl TcpEchoServer {
                         });
                     }
                 }
+            }
+            drop(listener);
+            select! {
+                _ = force_cancel.cancelled() => {
+                    connections.shutdown().await;
+                }
+                _ = async {
+                    while connections.join_next().await.is_some() {}
+                } => {}
             }
         });
         Ok(Self {
@@ -120,39 +128,50 @@ impl TcpEchoServer {
         loop {
             let n = select! {
                 _ = cancel.cancelled() => {
+                    _ = sock.shutdown().await;
                     return
                 }
                 _ = &mut idle => {
+                    drop(sock);
+                    #[cfg(debug_assertions)]
                     println!("Idle timeout elapsed, closing connection");
                     return
                 }
                 read_res = timeout(timeouts.read, sock.read(&mut buf)) => {
                     match read_res {
-                        Ok(Ok(0)) => return, // Connection closed.
+                        Ok(Ok(0)) => {  // Connection closed.
+                            return
+                        }
                         Ok(Ok(n)) => n,
                         Ok(Err(e)) => {
+                            drop(sock);
+                            #[cfg(debug_assertions)]
                             println!("Error reading from socket: {}", e);
                             return
                         }
                         Err(e) => {
+                            drop(sock);
+                            #[cfg(debug_assertions)]
                             println!("Socket read timed out: {}", e);
                             return
                         },
                     }
                 }
             };
-
             select! {
                 _ = cancel.cancelled() => {
+                    _ = sock.shutdown().await;
                     return
                 }
                 write_res = timeout(timeouts.write, sock.write_all(&buf[..n])) => {
                     match write_res {
                         Ok(Err(e)) => {
+                            #[cfg(debug_assertions)]
                             println!("Error writing to socket: {}", e);
                             return
                         },
                         Err(e) => {
+                            #[cfg(debug_assertions)]
                             println!("Socket write timed out: {}", e);
                             return
                         },
@@ -177,9 +196,17 @@ mod tests {
         let rt = Builder::new_current_thread().enable_all().build().unwrap();
         rt.block_on(async {
             let cancel = CancellationToken::new();
-            let server = TcpEchoServer::start(cancel, "localhost", 0, 0, ServerTimeouts::default())
-                .await
-                .unwrap();
+            let force_cancel = CancellationToken::new();
+            let server = TcpEchoServer::start(
+                cancel,
+                force_cancel,
+                "localhost",
+                0,
+                0,
+                ServerTimeouts::default(),
+            )
+            .await
+            .unwrap();
             let addr = server.addr();
             let mut stream = TcpStream::connect(addr).await.unwrap();
             stream.write_all(b"hello").await.unwrap();
